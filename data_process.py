@@ -39,10 +39,6 @@ def get_data_from_mat(mat_path):
     return mat_eeg_data, mat_event_data
 
 
-# 修正 START:
-# 这个函数被重写以解决 ValueError。
-# 它现在只负责将试验数据(trials)转换为窗口数据(windows)，并且只返回两个值：eeg_set 和 label_set。
-# 它不再错误地在内部拆分训练/测试集。
 def sliding_window(eeg_datas, labels, args, out_channels):
     window_size = args.window_length
     stride = int(window_size * (1 - args.overlap))
