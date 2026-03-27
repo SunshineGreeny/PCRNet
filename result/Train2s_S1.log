@@ -1,0 +1,6 @@
+2026-01-26 20:34:47,052 - INFO: Created a temporary directory at /tmp/tmppjxiqwjh
+2026-01-26 20:34:47,053 - INFO: Writing /tmp/tmppjxiqwjh/_remote_module_non_scriptable.py
+2026-01-26 20:35:38,436 - INFO: 0.7004498839378357
+2026-01-26 20:35:38,436 - INFO: tensor(0.8438)
+2026-01-26 20:56:15,578 - INFO: TorchDynamo compilation metrics:
+Function, Runtimes (s)
