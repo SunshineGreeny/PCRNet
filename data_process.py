@@ -65,7 +65,6 @@ def sliding_window(eeg_datas, labels, args, out_channels):
     label_set = np.array(all_labels).reshape(-1, 1) # 重塑以保持一致性
 
     return eeg_set, label_set
-# 修正 END
 
 
 def new_sliding_window(eeg_datas, labels, args, out_channels):
