@@ -9,7 +9,6 @@ class PCRNet(nn.Module):
         super(PCRNet, self).__init__()
         in_channel = args.eeg_channel
         seq_len = args.window_length
-        spectral_ablation = getattr(args, "spectral_ablation", "full")
 
         self.out = nn.Linear(5, 2)
         self.flatten = nn.Flatten()
@@ -22,7 +21,6 @@ class PCRNet(nn.Module):
             in_channel=1,
             seq_len=seq_len,
             base_dim=16,
-            ablation_mode=spectral_ablation,
         )
 
         self.Spatiotemporal_Convolution = Spatiotemporal_Convolution(
