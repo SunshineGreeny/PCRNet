@@ -104,9 +104,8 @@ class Complex_Feature_Mixer(nn.Module):
 
 
 class Gated_Spectral_Refinement(nn.Module):
-    def __init__(self, channels, expand=2, ablation_mode="full"):
+    def __init__(self, channels, expand=2):
         super(Gated_Spectral_Refinement, self).__init__()
-        self.ablation_mode = ablation_mode
 
         self.amplitude_importance_gate = nn.Sequential(
             nn.Conv2d(channels, channels * expand, 1),
@@ -131,14 +130,11 @@ class Gated_Spectral_Refinement(nn.Module):
 
         mag_mask = self.amplitude_importance_gate(mag)
 
-        if self.ablation_mode == "magnitude-only":
-            real_refined = mag * mag_mask
-            imag_refined = torch.zeros_like(real_refined)
-        else:
-            real_feat = self.real_mixer(real)
-            imag_feat = self.imag_mixer(imag)
-            real_refined = real_feat * mag_mask
-            imag_refined = imag_feat * mag_mask
+        real_feat = self.real_mixer(real)
+        imag_feat = self.imag_mixer(imag)
+
+        real_refined = real_feat * mag_mask
+        imag_refined = imag_feat * mag_mask
 
         x_freq_refined = torch.complex(real_refined, imag_refined)
         x_out = torch.fft.irfft2(x_freq_refined, s=(H, W), norm="backward")
@@ -147,12 +143,10 @@ class Gated_Spectral_Refinement(nn.Module):
 
 
 class Residual_Spectral_Interface(nn.Module):
-    def __init__(self, channels, ablation_mode="full"):
+    def __init__(self, channels):
         super().__init__()
         self.norm = LayerNorm2d(channels)
-        self.gsrm = Gated_Spectral_Refinement(
-            channels, expand=2, ablation_mode=ablation_mode
-        )
+        self.gsrm = Gated_Spectral_Refinement(channels, expand=2)  # Uses GSRM
 
         self.gamma = nn.Parameter(torch.zeros((1, channels, 1, 1)), requires_grad=True)
 
@@ -188,7 +182,7 @@ class Dilated_Temporal_Context_Unit(nn.Module):
 
 
 class Dual_Domain_Integration(nn.Module):
-    def __init__(self, in_channel, seq_len, base_dim=16, ablation_mode="full"):
+    def __init__(self, in_channel, seq_len, base_dim=16):
         super(Dual_Domain_Integration, self).__init__()
 
         self.preprocess = nn.Sequential(
@@ -201,9 +195,7 @@ class Dual_Domain_Integration(nn.Module):
             Dilated_Temporal_Context_Unit(base_dim, base_dim, kernel_size=(1, 3), dilation=4),
         )
 
-        self.freq_stream = Residual_Spectral_Interface(
-            channels=base_dim, ablation_mode=ablation_mode
-        )
+        self.freq_stream = Residual_Spectral_Interface(channels=base_dim)
 
         # Cross-Domain Fusion
         self.fusion = nn.Sequential(
@@ -350,3 +342,4 @@ class Multiscale_Temporal_Attention(nn.Module):
         out = out.view(x.shape[0], 1, 1, -1)
         out = self.project_out(out)
         return out
+
