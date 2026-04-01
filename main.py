@@ -42,7 +42,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-# 训練前初始化配置
+# 训练前初始化配置
 def initiate(args, train_loader, valid_loader, test_loader, subject):
     model = PCRNet(args)
 
@@ -294,7 +294,7 @@ def main_KUL(name="S13", dataset="KUL", data_document_path="../KUL", time_len=1)
     test_loader = DataLoader(dataset=CustomDatasets(seq_test_data, test_label),
                              batch_size=args.batch_size, drop_last=True)
 
-    # 训練
+    # 训练
     loss, acc = initiate(args, train_loader, valid_loader, test_loader, args.name)
 
     info_msg = f'{dataset}_{name}_{str(time_len)}s loss:{str(loss)} acc:{str(acc.item())}'
@@ -337,13 +337,11 @@ def main_DTU(name="S13", dataset="KUL", data_document_path="../DTU", time_len=1)
     args.window_metadata = DotMap(start=0, end=1, target=2, index=3, trail_number=4, subject_number=5)
     logger = get_logger(args.name, args.log_path, time_len)
 
-    # # load data 和 label
-    # ------------------------------------DTU------------------------------------------
+    # load data 和 label
     subpath = args.data_document_path + '/' + str(args.name) + '_data_preproc.mat'
     eeg_data, event_data = get_data_from_mat(subpath)
     eeg_data = np.array(eeg_data)  # DTU
     eeg_data = eeg_data[:, :, 0:64]  # DTU
-    # ------------------------------------DTU------------------------------------------
 
     data = np.vstack(eeg_data)
     eeg_data = data.reshape([args.trail_number, -1, args.eeg_channel])
@@ -398,7 +396,7 @@ def main_DTU(name="S13", dataset="KUL", data_document_path="../DTU", time_len=1)
     test_loader = DataLoader(dataset=CustomDatasets(seq_test_data, test_label),
                              batch_size=args.batch_size, drop_last=True)
 
-    # 训練
+    # 训练
     loss, acc = initiate(args, train_loader, valid_loader, test_loader, args.name)
 
     info_msg = f'{dataset}_{name}_{str(time_len)}s loss:{str(loss)} acc:{str(acc.item())}'
@@ -426,8 +424,8 @@ def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=
     args.log_interval = 20
     args.image_size = 32
     args.people_number = 10
-    args.eeg_channel = 32  # 修正: AVED 物理上就是 32 通道
-    args.csp_comp = 32     # 修正: CSP 组件数不能超过 EEG 通道数
+    args.eeg_channel = 32  
+    args.csp_comp = 32     
     args.audio_channel = 1
     args.channel_number = args.eeg_channel + args.audio_channel * 2
     args.trail_number = 16
@@ -462,12 +460,7 @@ def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=
     eeg_data_reshaped = np.array(eeg_data_reshaped)  # (16, samples_per_trial, 32)
 
     # 应用滑动窗口
-    # 修正 START:
-    # 1. sliding_window 函数已被修正，不再内部分割数据集，仅执行窗口化操作。
-    # 2. 修正了函数调用，传递正确的通道数 `args.eeg_channel` 而不是 `args.subject_number`。
-    # 3. 修正了返回值解包，因为修正后的函数返回 2 个值。
     eeg_windows, event_windows = sliding_window(eeg_data_reshaped, event_data, args, args.eeg_channel)
-    # 修正 END
 
     # 转换为适合CSP的格式
     eeg_windows = eeg_windows.transpose(0, 2, 1)  # (n_windows, channels, time_points)
@@ -533,7 +526,7 @@ def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=
     test_loader = DataLoader(dataset=CustomDatasets(seq_test_data, test_label),
                              batch_size=args.batch_size, drop_last=True)
 
-    # 训練
+    # 训练
     loss, acc = initiate(args, train_loader, valid_loader, test_loader, f"{args.name}_{modality}")
 
     info_msg = f'{dataset}_{name}_{modality}_{str(time_len)}s loss:{loss:.4f} acc:{acc.item():.4f}'
@@ -591,10 +584,6 @@ if __name__ == "__main__":
             result_logger.info(info_msg)
             all_test_acc.extend(modality_acc)
 
-    # 修正 START:
-    # `total_acc` 仅保存最后一次循环的结果，不能用于计算平均值。
-    # 应使用 `all_test_acc` 列表，它包含了所有被试的结果。
     print(f'avg_acc: {np.mean(all_test_acc):.4f}')
-    # 修正 END
     info_msg = f'The average accuracy of {config.dataset}_{str(config.time_len)}s avg_acc:{np.mean(all_test_acc):.4f} std:{np.std(all_test_acc):.4f} '
     result_logger.info(info_msg)
