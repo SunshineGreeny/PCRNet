@@ -175,8 +175,6 @@ def train_model(settings, args, train_loader, valid_loader, test_loader, subject
 
     return test_loss, test_acc
 
-
-# ========================= AVED 数据加载函数 ====================================
 def get_AVED_data(args, test_id, modality="audio-only"):
     '''description: get AVED data for specific subject and modality
     param {type}
@@ -186,10 +184,8 @@ def get_AVED_data(args, test_id, modality="audio-only"):
 
     # 根据模态选择数据路径
     if modality == "audio-only":
-        # 修正: 将 args.data_path 改为 args.data_document_path
         filename = os.path.join(args.data_document_path, "audio-only", f"sub{test_id}.csv")
     elif modality == "audio-video":
-        # 修正: 将 args.data_path 改为 args.data_document_path
         filename = os.path.join(args.data_document_path, "audio-video", f"sub{test_id}.csv")
     else:
         raise ValueError(f"Unsupported modality: {modality}")
