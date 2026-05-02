@@ -51,7 +51,6 @@ def sliding_window(eeg_datas, labels, args, out_channels):
         trial_eeg = eeg_datas[trial_index]  # 形状: (samples, channels)
         trial_label = labels[trial_index]   # 单个值, 例如 1 或 2
 
-        # 为这个试验创建滑动窗口
         for i in range(0, trial_eeg.shape[0] - window_size + 1, stride):
             window = trial_eeg[i:i + window_size, :]
             all_windows.append(window)
@@ -60,9 +59,8 @@ def sliding_window(eeg_datas, labels, args, out_channels):
     if not all_windows:
         return np.array([]), np.array([])
 
-    # 将列表转换为 numpy 数组
     eeg_set = np.array(all_windows)
-    label_set = np.array(all_labels).reshape(-1, 1) # 重塑以保持一致性
+    label_set = np.array(all_labels).reshape(-1, 1) 
 
     return eeg_set, label_set
 
