@@ -1,2 +1,2 @@
 # PCRNet
-Phase-aware Complex Reffnement Network for EEG-based Auditory Attention Decoding
+Phase-aware Complex Refinement Network for EEG-based Auditory Attention Decoding
