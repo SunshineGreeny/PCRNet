@@ -41,19 +41,13 @@ class CustomDatasets(Dataset):
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-
-# 训练前初始化配置
 def initiate(args, train_loader, valid_loader, test_loader, subject):
     model = PCRNet(args)
 
-    # 打印模型参数量
     print(model)
     print(f"The model has {count_parameters(model):,} trainable parameters.")
 
-    # 获取损失函数
     criterion = nn.CrossEntropyLoss()
-
-    # 获取优化器
     optimizer = optim.AdamW(params=model.parameters(), lr=0.004, weight_decay=3e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=0.003 / 10)
     model = model.cuda()
@@ -182,7 +176,6 @@ def get_AVED_data(args, test_id, modality="audio-only"):
         data: EEG data
         label: attention labels'''
 
-    # 根据模态选择数据路径
     if modality == "audio-only":
         filename = os.path.join(args.data_document_path, "audio-only", f"sub{test_id}.csv")
     elif modality == "audio-video":
@@ -196,7 +189,6 @@ def get_AVED_data(args, test_id, modality="audio-only"):
     data_pf = pd.read_csv(filename, header=None)
     eeg_data = data_pf.iloc[:, :].values
 
-    # AVED 数据集标签：16个试次，交替的1和2
     all_label = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
 
     print(f'Finish get the {modality} data from: {filename}')
@@ -290,7 +282,6 @@ def main_KUL(name="S13", dataset="KUL", data_document_path="../KUL", time_len=1)
     test_loader = DataLoader(dataset=CustomDatasets(seq_test_data, test_label),
                              batch_size=args.batch_size, drop_last=True)
 
-    # 训练
     loss, acc = initiate(args, train_loader, valid_loader, test_loader, args.name)
 
     info_msg = f'{dataset}_{name}_{str(time_len)}s loss:{str(loss)} acc:{str(acc.item())}'
@@ -392,7 +383,6 @@ def main_DTU(name="S13", dataset="KUL", data_document_path="../DTU", time_len=1)
     test_loader = DataLoader(dataset=CustomDatasets(seq_test_data, test_label),
                              batch_size=args.batch_size, drop_last=True)
 
-    # 训练
     loss, acc = initiate(args, train_loader, valid_loader, test_loader, args.name)
 
     info_msg = f'{dataset}_{name}_{str(time_len)}s loss:{str(loss)} acc:{str(acc.item())}'
@@ -438,13 +428,10 @@ def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=
 
     logger = get_logger(f"{args.name}_{modality}", args.log_path, time_len)
 
-    # 加载 AVED 数据
     print(f'Loading AVED {modality} data for subject {args.name}...')
     eeg_data, event_data = get_AVED_data(args, args.subject_number, modality)
-    # 将标签从 [1, 2] 转换为 [0, 1]，以匹配模型的输出 (0-indexed)
     event_data = np.array(event_data) - 1
 
-    # 重塑数据为试次格式
     samples_per_trial = eeg_data.shape[0] // args.trail_number
     eeg_data_reshaped = []
     for i in range(args.trail_number):
@@ -455,38 +442,30 @@ def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=
 
     eeg_data_reshaped = np.array(eeg_data_reshaped)  # (16, samples_per_trial, 32)
 
-    # 应用滑动窗口
     eeg_windows, event_windows = sliding_window(eeg_data_reshaped, event_data, args, args.eeg_channel)
 
-    # 转换为适合CSP的格式
     eeg_windows = eeg_windows.transpose(0, 2, 1)  # (n_windows, channels, time_points)
     event_windows = np.squeeze(event_windows)
 
-    # 划分训练测试集
     train_data, test_data, train_label, test_label = train_test_split(
         eeg_windows, event_windows, test_size=args.test_percent,
         random_state=42, stratify=event_windows
     )
 
-    # 应用CSP
     csp = CSP(n_components=args.csp_comp, reg=None, log=None, cov_est='concat',
               transform_into='csp_space', norm_trace=True)
     train_data = csp.fit_transform(train_data, train_label)
     test_data = csp.transform(test_data)
 
-    # 调整维度
     train_data = train_data.transpose(0, 2, 1)  # (n_train, time_points, csp_components)
     test_data = test_data.transpose(0, 2, 1)  # (n_test, time_points, csp_components)
 
-    # 应用滑动窗口到CSP特征
     train_eeg, train_label = sliding_window_csp(train_data, train_label, args, args.csp_comp)
     test_eeg, test_label = sliding_window_csp(test_data, test_label, args, args.csp_comp)
 
-    # 准备数据
     seq_train_data = np.expand_dims(train_eeg, axis=-1)
     seq_test_data = np.expand_dims(test_eeg, axis=-1)
 
-    # 打乱数据
     np.random.seed(200)
     np.random.shuffle(seq_train_data)
     np.random.seed(200)
@@ -497,7 +476,6 @@ def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=
     np.random.seed(200)
     np.random.shuffle(test_label)
 
-    # 划分验证集
     seq_train_data, seq_valid_data, train_label, valid_label = train_test_split(
         seq_train_data, train_label, test_size=args.vali_percent, random_state=42
     )
@@ -506,7 +484,6 @@ def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=
     args.n_valid = np.size(valid_label)
     args.n_test = np.size(test_label)
 
-    # 调整维度顺序
     seq_train_data = seq_train_data.transpose(0, 3, 2, 1)
     seq_valid_data = seq_valid_data.transpose(0, 3, 2, 1)
     seq_test_data = seq_test_data.transpose(0, 3, 2, 1)
@@ -514,7 +491,6 @@ def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=
     print(f"Training data shape: {seq_train_data.shape}")
     print(f"Training labels: {np.unique(train_label, return_counts=True)}")
 
-    # 创建数据加载器
     train_loader = DataLoader(dataset=CustomDatasets(seq_train_data, train_label),
                               batch_size=args.batch_size, drop_last=True)
     valid_loader = DataLoader(dataset=CustomDatasets(seq_valid_data, valid_label),
@@ -522,7 +498,6 @@ def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=
     test_loader = DataLoader(dataset=CustomDatasets(seq_test_data, test_label),
                              batch_size=args.batch_size, drop_last=True)
 
-    # 训练
     loss, acc = initiate(args, train_loader, valid_loader, test_loader, f"{args.name}_{modality}")
 
     info_msg = f'{dataset}_{name}_{modality}_{str(time_len)}s loss:{loss:.4f} acc:{acc.item():.4f}'
@@ -560,8 +535,7 @@ if __name__ == "__main__":
                                  time_len=config.time_len)
             all_test_acc.append(total_acc)
     elif config.dataset == "AVED":
-        # 可以选择运行单个模态或两个模态
-        modalities = getattr(config, 'modalities', ['audio-only'])  # 默认只运行audio-only
+        modalities = getattr(config, 'modalities', ['audio-only'])  
 
         for modality in modalities:
             print(f"\n=== Processing AVED {modality} modality ===")
