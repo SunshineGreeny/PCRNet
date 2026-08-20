@@ -169,31 +169,6 @@ def train_model(settings, args, train_loader, valid_loader, test_loader, subject
 
     return test_loss, test_acc
 
-def get_AVED_data(args, test_id, modality="audio-only"):
-    '''description: get AVED data for specific subject and modality
-    param {type}
-    return {type}:
-        data: EEG data
-        label: attention labels'''
-
-    if modality == "audio-only":
-        filename = os.path.join(args.data_document_path, "audio-only", f"sub{test_id}.csv")
-    elif modality == "audio-video":
-        filename = os.path.join(args.data_document_path, "audio-video", f"sub{test_id}.csv")
-    else:
-        raise ValueError(f"Unsupported modality: {modality}")
-
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"Data file not found: {filename}")
-
-    data_pf = pd.read_csv(filename, header=None)
-    eeg_data = data_pf.iloc[:, :].values
-
-    all_label = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
-
-    print(f'Finish get the {modality} data from: {filename}')
-    return eeg_data, all_label
-
 
 def main_KUL(name="S13", dataset="KUL", data_document_path="../KUL", time_len=1):
     args = DotMap()
@@ -393,122 +368,6 @@ def main_DTU(name="S13", dataset="KUL", data_document_path="../DTU", time_len=1)
     logger.info(acc)
     return acc
 
-
-def main_AVED(name="S1", dataset="AVED", data_document_path="../AVED", time_len=1, modality="audio-only"):
-    args = DotMap()
-    args.name = name
-    args.subject_number = int(name[1:]) if 'S' in name else int(name)
-    args.data_document_path = data_document_path
-    args.modality = modality
-    args.ConType = ["No"]
-    args.fs = 128
-    args.window_length = math.ceil(args.fs * time_len)
-    args.overlap = 0.5
-    args.batch_size = 32
-    args.max_epoch = 100
-    args.patience = 15
-    args.log_interval = 20
-    args.image_size = 32
-    args.people_number = 10
-    args.eeg_channel = 32  
-    args.csp_comp = 32     
-    args.audio_channel = 1
-    args.channel_number = args.eeg_channel + args.audio_channel * 2
-    args.trail_number = 16
-    args.cell_number = 46080
-    args.test_percent = 0.2
-    args.vali_percent = 0.1
-    args.label_col = 0
-    args.log_path = "./result"
-    args.win_len = args.window_length
-    args.window_lap = args.window_length * args.overlap
-
-    args.frequency_resolution = args.fs / args.window_length
-    args.window_metadata = DotMap(start=0, end=1, target=2, index=3, trail_number=4, subject_number=5)
-
-    logger = get_logger(f"{args.name}_{modality}", args.log_path, time_len)
-
-    print(f'Loading AVED {modality} data for subject {args.name}...')
-    eeg_data, event_data = get_AVED_data(args, args.subject_number, modality)
-    event_data = np.array(event_data) - 1
-
-    samples_per_trial = eeg_data.shape[0] // args.trail_number
-    eeg_data_reshaped = []
-    for i in range(args.trail_number):
-        start_idx = i * samples_per_trial
-        end_idx = (i + 1) * samples_per_trial
-        trial_data = eeg_data[start_idx:end_idx, :]
-        eeg_data_reshaped.append(trial_data)
-
-    eeg_data_reshaped = np.array(eeg_data_reshaped)  # (16, samples_per_trial, 32)
-
-    eeg_windows, event_windows = sliding_window(eeg_data_reshaped, event_data, args, args.eeg_channel)
-
-    eeg_windows = eeg_windows.transpose(0, 2, 1)  # (n_windows, channels, time_points)
-    event_windows = np.squeeze(event_windows)
-
-    train_data, test_data, train_label, test_label = train_test_split(
-        eeg_windows, event_windows, test_size=args.test_percent,
-        random_state=42, stratify=event_windows
-    )
-
-    csp = CSP(n_components=args.csp_comp, reg=None, log=None, cov_est='concat',
-              transform_into='csp_space', norm_trace=True)
-    train_data = csp.fit_transform(train_data, train_label)
-    test_data = csp.transform(test_data)
-
-    train_data = train_data.transpose(0, 2, 1)  # (n_train, time_points, csp_components)
-    test_data = test_data.transpose(0, 2, 1)  # (n_test, time_points, csp_components)
-
-    train_eeg, train_label = sliding_window_csp(train_data, train_label, args, args.csp_comp)
-    test_eeg, test_label = sliding_window_csp(test_data, test_label, args, args.csp_comp)
-
-    seq_train_data = np.expand_dims(train_eeg, axis=-1)
-    seq_test_data = np.expand_dims(test_eeg, axis=-1)
-
-    np.random.seed(200)
-    np.random.shuffle(seq_train_data)
-    np.random.seed(200)
-    np.random.shuffle(train_label)
-
-    np.random.seed(200)
-    np.random.shuffle(seq_test_data)
-    np.random.seed(200)
-    np.random.shuffle(test_label)
-
-    seq_train_data, seq_valid_data, train_label, valid_label = train_test_split(
-        seq_train_data, train_label, test_size=args.vali_percent, random_state=42
-    )
-
-    args.n_train = np.size(train_label)
-    args.n_valid = np.size(valid_label)
-    args.n_test = np.size(test_label)
-
-    seq_train_data = seq_train_data.transpose(0, 3, 2, 1)
-    seq_valid_data = seq_valid_data.transpose(0, 3, 2, 1)
-    seq_test_data = seq_test_data.transpose(0, 3, 2, 1)
-
-    print(f"Training data shape: {seq_train_data.shape}")
-    print(f"Training labels: {np.unique(train_label, return_counts=True)}")
-
-    train_loader = DataLoader(dataset=CustomDatasets(seq_train_data, train_label),
-                              batch_size=args.batch_size, drop_last=True)
-    valid_loader = DataLoader(dataset=CustomDatasets(seq_valid_data, valid_label),
-                              batch_size=args.batch_size, drop_last=True)
-    test_loader = DataLoader(dataset=CustomDatasets(seq_test_data, test_label),
-                             batch_size=args.batch_size, drop_last=True)
-
-    loss, acc = initiate(args, train_loader, valid_loader, test_loader, f"{args.name}_{modality}")
-
-    info_msg = f'{dataset}_{name}_{modality}_{str(time_len)}s loss:{loss:.4f} acc:{acc.item():.4f}'
-    result_logger.info(info_msg)
-
-    print(f"Loss: {loss:.4f}, Acc: {acc.item():.4f}")
-    logger.info(f"Loss: {loss:.4f}")
-    logger.info(f"Acc: {acc.item():.4f}")
-    return acc.item()
-
-
 result_logger = logging.getLogger('result')
 result_logger.setLevel(logging.INFO)
 
@@ -534,25 +393,6 @@ if __name__ == "__main__":
             total_acc = main_DTU(name=name, dataset=config.dataset, data_document_path=config.data_document_path,
                                  time_len=config.time_len)
             all_test_acc.append(total_acc)
-    elif config.dataset == "AVED":
-        modalities = getattr(config, 'modalities', ['audio-only'])  
-
-        for modality in modalities:
-            print(f"\n=== Processing AVED {modality} modality ===")
-            modality_acc = []
-            for i in range(1, config.people_number + 1):
-                name = 'S' + str(i)
-                acc = main_AVED(name=name, dataset=config.dataset,
-                                data_document_path=config.data_document_path,
-                                time_len=config.time_len, modality=modality)
-                modality_acc.append(acc)
-
-            avg_acc = np.mean(modality_acc)
-            std_acc = np.std(modality_acc)
-            print(f"AVED {modality} - Average Acc: {avg_acc:.4f} ± {std_acc:.4f}")
-            info_msg = f'AVED_{modality}_{str(config.time_len)}s avg_acc:{avg_acc:.4f} std:{std_acc:.4f}'
-            result_logger.info(info_msg)
-            all_test_acc.extend(modality_acc)
 
     print(f'avg_acc: {np.mean(all_test_acc):.4f}')
     info_msg = f'The average accuracy of {config.dataset}_{str(config.time_len)}s avg_acc:{np.mean(all_test_acc):.4f} std:{np.std(all_test_acc):.4f} '
